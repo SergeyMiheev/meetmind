@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  accounts      Account[]
+  summaries     Summary[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  accessToken       String? @map("access_token")
+  refreshToken      String? @map("refresh_token")
+  expiresAt         Int?    @map("expires_at")
+  tokenType         String? @map("token_type")
+  scope             String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Summary {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  calendarEventId String   @map("calendar_event_id")
+  eventTitle      String   @map("event_title")
+  eventStart      DateTime @map("event_start")
+  eventEnd        DateTime @map("event_end")
+  eventAttendees  Json?    @map("event_attendees")
+  rawInput        String   @map("raw_input")
+  summaryContext  String?  @map("summary_context")
+  summaryMainIdeas String[] @map("summary_main_ideas")
+  summaryActions  String[] @map("summary_actions")
+  tags            String[]
+  modelUsed       String?  @map("model_used")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, calendarEventId])
+  @@index([userId])
+  @@index([calendarEventId])
+  @@map("summaries")
+}
