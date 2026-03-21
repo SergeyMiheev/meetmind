@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
             summaryMainIdeas: parsed.mainIdeas || [],
             summaryActions: parsed.actionItems || [],
             tags: parsed.tags || [],
-            modelUsed: "gemini-2.0-flash",
+            modelUsed: "gemini-2.5-flash",
           },
           update: {
             rawInput,
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
             summaryMainIdeas: parsed.mainIdeas || [],
             summaryActions: parsed.actionItems || [],
             tags: parsed.tags || [],
-            modelUsed: "gemini-2.0-flash",
+            modelUsed: "gemini-2.5-flash",
             updatedAt: new Date(),
           },
         });
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
       summaryMainIdeas: parsed.mainIdeas || [],
       summaryActions: parsed.actionItems || [],
       tags: parsed.tags || [],
-      modelUsed: "gemini-2.0-flash",
+      modelUsed: "gemini-2.5-flash",
     });
   } catch (err) {
     console.error("[summary] Unexpected error:", err);

@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export const geminiFlash = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash",
+  model: "gemini-2.5-flash",
 });
 
 export const SUMMARY_PROMPT = `You are a meeting summary assistant. Given the user's raw notes/thoughts about a meeting and the calendar context, create a structured summary.
