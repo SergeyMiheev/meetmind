@@ -4,13 +4,14 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   const session = await auth();
-  if (!session?.userEmail) {
+  const email = session?.user?.email || (session as unknown as Record<string, unknown>)?.userEmail as string;
+  if (!email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const user = await prisma.user.findUnique({
-      where: { email: session.userEmail },
+      where: { email },
     });
 
     if (!user) {
