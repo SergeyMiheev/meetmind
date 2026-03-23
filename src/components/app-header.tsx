@@ -7,16 +7,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
 interface AppHeaderProps {
-  samePeopleFilter: boolean;
+  activeView: "calendar" | "analytics" | "people";
   onToggleSamePeople: () => void;
-  showAnalytics: boolean;
   onToggleAnalytics: () => void;
 }
 
 export function AppHeader({
-  samePeopleFilter,
+  activeView,
   onToggleSamePeople,
-  showAnalytics,
   onToggleAnalytics,
 }: AppHeaderProps) {
   const { data: session } = useSession();
@@ -30,24 +28,24 @@ export function AppHeader({
 
       <div className="flex items-center gap-1.5">
         <Button
-          variant={samePeopleFilter ? "default" : "outline"}
+          variant={activeView === "people" ? "default" : "outline"}
           size="sm"
           onClick={onToggleSamePeople}
           className={cn(
             "gap-1.5",
-            samePeopleFilter && "bg-indigo-500 hover:bg-indigo-600"
+            activeView === "people" && "bg-indigo-500 hover:bg-indigo-600"
           )}
         >
           <Users className="h-3.5 w-3.5" />
           Same People
         </Button>
         <Button
-          variant={showAnalytics ? "default" : "outline"}
+          variant={activeView === "analytics" ? "default" : "outline"}
           size="sm"
           onClick={onToggleAnalytics}
           className={cn(
             "gap-1.5",
-            showAnalytics && "bg-indigo-500 hover:bg-indigo-600"
+            activeView === "analytics" && "bg-indigo-500 hover:bg-indigo-600"
           )}
         >
           <BarChart3 className="h-3.5 w-3.5" />

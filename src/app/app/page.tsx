@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/sidebar";
 import { MeetingDetail } from "@/components/meeting-detail";
 import { AppHeader } from "@/components/app-header";
 import { WeeklyAnalytics } from "@/components/weekly-analytics";
+import { SamePeopleView } from "@/components/same-people-view";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   startOfWeek,
@@ -52,7 +53,8 @@ export default function AppPage() {
   const [summaries, setSummaries] = useState<SummaryData[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [samePeopleFilter, setSamePeopleFilter] = useState(false);
+  const [showSamePeople, setShowSamePeople] = useState(false);
+  const [samePeopleEmail, setSamePeopleEmail] = useState<string | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -98,31 +100,34 @@ export default function AppPage() {
 
   const summaryEventIds = new Set(summaries.map((s) => s.calendarEventId));
 
-  // Same People filter: highlight events that share attendees with the selected event
-  const highlightedEventIds = useMemo(() => {
-    if (!samePeopleFilter || !selectedEventId) return null;
-    const selected = events.find((e) => e.id === selectedEventId);
-    if (!selected || !selected.attendees?.length) return null;
+  const handleToggleSamePeople = () => {
+    setShowSamePeople((v) => !v);
+    setSamePeopleEmail(null);
+    if (!showSamePeople) setShowAnalytics(false);
+  };
 
-    const selectedEmails = new Set(selected.attendees.map((a) => a.email));
-    const matching = new Set<string>();
-    matching.add(selectedEventId);
-
-    for (const event of events) {
-      if (event.id === selectedEventId) continue;
-      const hasCommon = event.attendees?.some((a) => selectedEmails.has(a.email));
-      if (hasCommon) matching.add(event.id);
+  const handleToggleAnalytics = () => {
+    setShowAnalytics((v) => !v);
+    if (!showAnalytics) {
+      setShowSamePeople(false);
+      setSamePeopleEmail(null);
     }
-    return matching;
-  }, [samePeopleFilter, selectedEventId, events]);
+  };
+
+  const handleAttendeeClick = (email: string) => {
+    setShowSamePeople(true);
+    setSamePeopleEmail(email);
+    setShowAnalytics(false);
+  };
+
+  const activeView = showAnalytics ? "analytics" : showSamePeople ? "people" : "calendar";
 
   return (
     <div className="flex h-screen flex-col">
       <AppHeader
-        samePeopleFilter={samePeopleFilter}
-        onToggleSamePeople={() => setSamePeopleFilter((v) => !v)}
-        showAnalytics={showAnalytics}
-        onToggleAnalytics={() => setShowAnalytics((v) => !v)}
+        activeView={activeView}
+        onToggleSamePeople={handleToggleSamePeople}
+        onToggleAnalytics={handleToggleAnalytics}
       />
       <div className="flex flex-1 overflow-hidden">
         <main className="flex-1 overflow-auto p-6">
@@ -131,6 +136,15 @@ export default function AppPage() {
               events={events}
               summaries={summaries}
               weekStart={weekStart}
+            />
+          ) : showSamePeople ? (
+            <SamePeopleView
+              events={events}
+              weekStart={weekStart}
+              filterEmail={samePeopleEmail}
+              onEventClick={(id) => {
+                setSelectedEventId(id);
+              }}
             />
           ) : (
             <CalendarGrid
@@ -142,7 +156,6 @@ export default function AppPage() {
               onEventClick={setSelectedEventId}
               onNavigate={navigateWeek}
               selectedEventId={selectedEventId}
-              highlightedEventIds={highlightedEventIds}
             />
           )}
         </main>
@@ -180,6 +193,7 @@ export default function AppPage() {
               return [...prev, newSummary];
             });
           }}
+          onAttendeeClick={handleAttendeeClick}
         />
       )}
     </div>

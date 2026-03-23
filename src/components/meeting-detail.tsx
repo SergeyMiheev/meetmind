@@ -15,6 +15,16 @@ interface MeetingDetailProps {
   summary: SummaryData | null;
   onClose: () => void;
   onSummaryCreated: (summary: SummaryData) => void;
+  onAttendeeClick?: (email: string) => void;
+}
+
+function sanitizeHtml(html: string): string {
+  // Strip script tags and event handlers, keep safe formatting tags
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "")
+    .replace(/javascript:/gi, "");
 }
 
 export function MeetingDetail({
@@ -22,6 +32,7 @@ export function MeetingDetail({
   summary,
   onClose,
   onSummaryCreated,
+  onAttendeeClick,
 }: MeetingDetailProps) {
   const [rawInput, setRawInput] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -137,14 +148,29 @@ export function MeetingDetail({
               {format(parseISO(event.end), "h:mm a")}
             </p>
             {event.attendees?.length > 0 && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {event.attendees.map((a) => a.displayName || a.email).join(", ")}
-              </p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {event.attendees.map((a) => (
+                  <button
+                    key={a.email}
+                    onClick={() => {
+                      onClose();
+                      onAttendeeClick?.(a.email);
+                    }}
+                    className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground hover:bg-indigo-100 hover:text-indigo-700 transition-colors"
+                    title={`Show all meetings with ${a.displayName || a.email}`}
+                  >
+                    {a.displayName || a.email}
+                  </button>
+                ))}
+              </div>
             )}
             {event.description && (
               <div className="mt-3 rounded-md bg-muted/50 p-3">
                 <p className="text-xs font-medium text-muted-foreground mb-1">Description</p>
-                <p className="text-sm whitespace-pre-wrap break-words">{event.description}</p>
+                <div
+                  className="text-sm break-words prose prose-sm max-w-none prose-a:text-indigo-600 prose-a:underline"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(event.description) }}
+                />
               </div>
             )}
           </div>
@@ -256,7 +282,7 @@ export function MeetingDetail({
                     size="sm"
                     onClick={stopRecording}
                   >
-                    <Square className="mr-1 h-3.5 w-3.5" />
+                    <Square className="mr-1.5 h-3 w-3 fill-current" />
                     Stop ({seconds}s)
                   </Button>
                 ) : (
@@ -266,27 +292,28 @@ export function MeetingDetail({
                     onClick={startRecording}
                     disabled={transcribing}
                   >
-                    <Mic className="mr-1 h-3.5 w-3.5" />
+                    <Mic className="mr-1.5 h-3.5 w-3.5" />
                     {transcribing ? "Transcribing..." : "Record voice"}
                   </Button>
                 )}
               </div>
 
               <Button
-                className="w-full bg-indigo-500 text-white hover:bg-indigo-600"
                 onClick={handleGenerate}
                 disabled={!rawInput.trim() || generating}
+                className="w-full bg-indigo-500 hover:bg-indigo-600"
               >
                 {generating ? "Generating..." : "Generate Summary"}
               </Button>
 
-              {appendMode && (
+              {(appendMode || regenerateMode) && (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="mt-2 w-full"
                   onClick={() => {
                     setAppendMode(false);
+                    setRegenerateMode(false);
                     setRawInput("");
                   }}
                 >

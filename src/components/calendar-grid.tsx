@@ -16,7 +16,6 @@ interface CalendarGridProps {
   onEventClick: (eventId: string) => void;
   onNavigate: (direction: "prev" | "next" | "today") => void;
   selectedEventId: string | null;
-  highlightedEventIds?: Set<string> | null;
 }
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7); // 7:00 — 20:00
@@ -103,7 +102,6 @@ export function CalendarGrid({
   onEventClick,
   onNavigate,
   selectedEventId,
-  highlightedEventIds,
 }: CalendarGridProps) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -225,8 +223,6 @@ export function CalendarGrid({
                     const pos = getEventPosition(event);
                     const hasSummary = summaryEventIds.has(event.id);
                     const isSelected = selectedEventId === event.id;
-                    const isHighlighted = highlightedEventIds ? highlightedEventIds.has(event.id) : true;
-                    const isDimmed = highlightedEventIds && !isHighlighted;
                     const colors = OVERLAP_COLORS[colorIdx];
 
                     const widthPct = 100 / totalColumns;
@@ -239,9 +235,7 @@ export function CalendarGrid({
                           "absolute overflow-hidden rounded px-1.5 py-0.5 text-left text-xs transition-all border-l-2",
                           isSelected
                             ? "bg-indigo-500 text-white ring-2 ring-indigo-500 ring-offset-1 border-indigo-700 z-20"
-                            : isDimmed
-                              ? "bg-gray-100 text-gray-400 border-gray-200 opacity-50"
-                              : `${colors.bg} ${colors.text} ${colors.hover} border-${colors.dotFill.replace('bg-', '')}`,
+                            : `${colors.bg} ${colors.text} ${colors.hover} border-${colors.dotFill.replace('bg-', '')}`,
                         )}
                         style={{
                           top: pos.top,
