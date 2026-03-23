@@ -37,7 +37,7 @@ export function AppHeader({
           )}
         >
           <Users className="h-3.5 w-3.5" />
-          Same People
+          Commitments
         </Button>
         <Button
           variant={activeView === "analytics" ? "default" : "outline"}

@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { X, Mic, Square, Copy, RefreshCw, Plus, Check } from "lucide-react";
+import { X, Mic, Square, Copy, RefreshCw, Plus, Check, CircleDot, CalendarClock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { format, parseISO } from "date-fns";
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder";
-import type { CalendarEvent, SummaryData } from "@/app/app/page";
+import type { CalendarEvent, SummaryData, ActionItem } from "@/app/app/page";
 
 interface MeetingDetailProps {
   event: CalendarEvent | null;
@@ -19,12 +19,27 @@ interface MeetingDetailProps {
 }
 
 function sanitizeHtml(html: string): string {
-  // Strip script tags and event handlers, keep safe formatting tags
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/\son\w+="[^"]*"/gi, "")
     .replace(/\son\w+='[^']*'/gi, "")
     .replace(/javascript:/gi, "");
+}
+
+function getActions(summary: SummaryData): ActionItem[] {
+  if (summary.structuredActions && Array.isArray(summary.structuredActions) && summary.structuredActions.length > 0) {
+    return summary.structuredActions;
+  }
+  // Fallback: convert string[] to ActionItem[]
+  return summary.summaryActions.map((text) => ({ text, assignee: null, deadline: null }));
+}
+
+function formatDeadline(deadline: string): string {
+  try {
+    return format(parseISO(deadline), "MMM d");
+  } catch {
+    return deadline;
+  }
 }
 
 export function MeetingDetail({
@@ -95,18 +110,28 @@ export function MeetingDetail({
 
   const handleCopy = () => {
     if (!summary) return;
+    const actions = getActions(summary);
     const text = [
       `# ${summary.eventTitle}`,
       `Tags: ${summary.tags.join(", ")}`,
       "",
-      "## Context",
+      "## Summary",
       summary.summaryContext,
       "",
-      "## Main Ideas",
-      ...summary.summaryMainIdeas.map((i) => `- ${i}`),
-      "",
-      "## Action Items",
-      ...summary.summaryActions.map((a) => `- ${a}`),
+      ...(summary.summaryMainIdeas.length > 0
+        ? ["## Key Points", ...summary.summaryMainIdeas.map((i) => `- ${i}`), ""]
+        : []),
+      ...(actions.length > 0
+        ? [
+            "## Actions",
+            ...actions.map((a) => {
+              const parts = [`- ${a.text}`];
+              if (a.assignee) parts[0] += ` (${a.assignee})`;
+              if (a.deadline) parts[0] += ` — by ${a.deadline}`;
+              return parts[0];
+            }),
+          ]
+        : []),
     ].join("\n");
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -132,6 +157,11 @@ export function MeetingDetail({
       </div>
     );
   }
+
+  const actions = summary ? getActions(summary) : [];
+  const actionsWithDeadline = actions.filter((a) => a.deadline).sort((a, b) => (a.deadline! > b.deadline! ? 1 : -1));
+  const actionsWithoutDeadline = actions.filter((a) => !a.deadline);
+  const sortedActions = [...actionsWithDeadline, ...actionsWithoutDeadline];
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
@@ -181,8 +211,8 @@ export function MeetingDetail({
 
         <div className="p-6">
           {summary && !appendMode && !regenerateMode ? (
-            /* State B — Has Summary */
             <div>
+              {/* Tags */}
               <div className="mb-4 flex flex-wrap gap-1.5">
                 {summary.tags.map((tag) => (
                   <Badge key={tag} variant="secondary">
@@ -191,10 +221,11 @@ export function MeetingDetail({
                 ))}
               </div>
 
+              {/* Summary section */}
               {summary.summaryContext && (
                 <>
                   <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
-                    Context
+                    Summary
                   </h3>
                   <p className="mb-4 text-sm">{summary.summaryContext}</p>
                 </>
@@ -203,7 +234,7 @@ export function MeetingDetail({
               {summary.summaryMainIdeas.length > 0 && (
                 <>
                   <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
-                    Main Ideas
+                    Key Points
                   </h3>
                   <ul className="mb-4 space-y-1">
                     {summary.summaryMainIdeas.map((idea, i) => (
@@ -215,18 +246,37 @@ export function MeetingDetail({
                 </>
               )}
 
-              {summary.summaryActions.length > 0 && (
+              {/* Actions section */}
+              {sortedActions.length > 0 && (
                 <>
-                  <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
-                    Action Items
+                  <Separator className="my-4" />
+                  <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+                    <CircleDot className="h-3.5 w-3.5" />
+                    Actions ({sortedActions.length})
                   </h3>
-                  <ul className="mb-4 space-y-1">
-                    {summary.summaryActions.map((action, i) => (
-                      <li key={i} className="text-sm">
-                        ☐ {action}
-                      </li>
+                  <div className="space-y-2">
+                    {sortedActions.map((action, i) => (
+                      <div key={i} className="rounded-md border px-3 py-2">
+                        <p className="text-sm">{action.text}</p>
+                        {(action.assignee || action.deadline) && (
+                          <div className="mt-1.5 flex items-center gap-3">
+                            {action.assignee && (
+                              <span className="flex items-center gap-1 text-xs text-indigo-600">
+                                <User className="h-3 w-3" />
+                                {action.assignee}
+                              </span>
+                            )}
+                            {action.deadline && (
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <CalendarClock className="h-3 w-3" />
+                                {formatDeadline(action.deadline)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </>
               )}
 
@@ -260,7 +310,7 @@ export function MeetingDetail({
               </div>
             </div>
           ) : (
-            /* State A — No Summary (or append mode) */
+            /* State A — No Summary (or append/regenerate mode) */
             <div>
               {appendMode && (
                 <p className="mb-3 text-sm text-muted-foreground">

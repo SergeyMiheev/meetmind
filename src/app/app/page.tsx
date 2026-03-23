@@ -26,6 +26,12 @@ export interface CalendarEvent {
   description?: string;
 }
 
+export interface ActionItem {
+  text: string;
+  assignee: string | null;
+  deadline: string | null;
+}
+
 export interface SummaryData {
   id: string;
   calendarEventId: string;
@@ -36,6 +42,7 @@ export interface SummaryData {
   summaryContext: string | null;
   summaryMainIdeas: string[];
   summaryActions: string[];
+  structuredActions?: ActionItem[] | null;
   tags: string[];
   modelUsed: string | null;
   createdAt: string;
@@ -140,6 +147,7 @@ export default function AppPage() {
           ) : showSamePeople ? (
             <SamePeopleView
               events={events}
+              summaries={summaries}
               weekStart={weekStart}
               filterEmail={samePeopleEmail}
               onEventClick={(id) => {

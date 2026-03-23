@@ -3,6 +3,28 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { geminiFlash, SUMMARY_PROMPT } from "@/lib/gemini";
 
+function normalizeActions(actionItems: unknown): { flat: string[]; structured: { text: string; assignee: string | null; deadline: string | null }[] } {
+  if (!Array.isArray(actionItems)) return { flat: [], structured: [] };
+
+  const structured: { text: string; assignee: string | null; deadline: string | null }[] = [];
+  const flat: string[] = [];
+
+  for (const item of actionItems) {
+    if (typeof item === "string") {
+      flat.push(item);
+      structured.push({ text: item, assignee: null, deadline: null });
+    } else if (item && typeof item === "object" && "text" in item) {
+      const text = String(item.text);
+      const assignee = item.assignee && item.assignee !== "null" ? String(item.assignee) : null;
+      const deadline = item.deadline && item.deadline !== "null" ? String(item.deadline) : null;
+      flat.push(assignee ? `${assignee} ${text}` : text);
+      structured.push({ text, assignee, deadline });
+    }
+  }
+
+  return { flat, structured };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -60,6 +82,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { flat: flatActions, structured: structuredActions } = normalizeActions(parsed.actionItems);
+
     const userEmail = session.user.email || (session as unknown as Record<string, unknown>).userEmail as string;
 
     try {
@@ -85,7 +109,8 @@ export async function POST(request: NextRequest) {
             rawInput,
             summaryContext: parsed.context,
             summaryMainIdeas: parsed.mainIdeas || [],
-            summaryActions: parsed.actionItems || [],
+            summaryActions: flatActions,
+            structuredActions: structuredActions,
             tags: parsed.tags || [],
             modelUsed: "gemini-2.5-flash",
           },
@@ -93,7 +118,8 @@ export async function POST(request: NextRequest) {
             rawInput,
             summaryContext: parsed.context,
             summaryMainIdeas: parsed.mainIdeas || [],
-            summaryActions: parsed.actionItems || [],
+            summaryActions: flatActions,
+            structuredActions: structuredActions,
             tags: parsed.tags || [],
             modelUsed: "gemini-2.5-flash",
             updatedAt: new Date(),
@@ -107,7 +133,7 @@ export async function POST(request: NextRequest) {
       console.error("[summary] DB error:", dbErr);
     }
 
-    // Return AI result even if DB save fails — include all fields frontend expects
+    // Return AI result even if DB save fails
     return NextResponse.json({
       id: `temp-${Date.now()}`,
       calendarEventId: eventId,
@@ -118,7 +144,8 @@ export async function POST(request: NextRequest) {
       rawInput,
       summaryContext: parsed.context,
       summaryMainIdeas: parsed.mainIdeas || [],
-      summaryActions: parsed.actionItems || [],
+      summaryActions: flatActions,
+      structuredActions: structuredActions,
       tags: parsed.tags || [],
       modelUsed: "gemini-2.5-flash",
       createdAt: new Date().toISOString(),

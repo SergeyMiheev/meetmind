@@ -2,12 +2,13 @@
 
 import { useMemo } from "react";
 import { format, parseISO, differenceInMinutes } from "date-fns";
-import { Users, Clock, Lightbulb, Calendar } from "lucide-react";
+import { Users, Clock, Lightbulb, Calendar, CircleDot, CalendarClock, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { CalendarEvent } from "@/app/app/page";
+import type { CalendarEvent, SummaryData, ActionItem } from "@/app/app/page";
 
 interface SamePeopleViewProps {
   events: CalendarEvent[];
+  summaries: SummaryData[];
   weekStart: Date;
   filterEmail?: string | null;
   onEventClick: (eventId: string) => void;
@@ -18,6 +19,7 @@ interface PersonGroup {
   name: string;
   events: CalendarEvent[];
   totalMinutes: number;
+  actions: (ActionItem & { eventTitle: string; eventId: string; eventStart: string })[];
 }
 
 interface MeetingCluster {
@@ -27,12 +29,52 @@ interface MeetingCluster {
   totalMinutes: number;
 }
 
-export function SamePeopleView({ events, weekStart, filterEmail, onEventClick }: SamePeopleViewProps) {
-  const { personGroups, clusters, recommendations } = useMemo(() => {
+function getActions(summary: SummaryData): ActionItem[] {
+  if (summary.structuredActions && Array.isArray(summary.structuredActions) && summary.structuredActions.length > 0) {
+    return summary.structuredActions;
+  }
+  return summary.summaryActions.map((text) => ({ text, assignee: null, deadline: null }));
+}
+
+function formatDeadline(deadline: string): string {
+  try {
+    return format(parseISO(deadline), "MMM d");
+  } catch {
+    return deadline;
+  }
+}
+
+export function SamePeopleView({ events, summaries, weekStart, filterEmail, onEventClick }: SamePeopleViewProps) {
+  const { personGroups, clusters, allActions, recommendations } = useMemo(() => {
+    // Build summary lookup
+    const summaryByEventId = new Map<string, SummaryData>();
+    for (const s of summaries) {
+      summaryByEventId.set(s.calendarEventId, s);
+    }
+
+    // Collect all actions from all summaries
+    const allActions: (ActionItem & { eventTitle: string; eventId: string; eventStart: string })[] = [];
+    for (const s of summaries) {
+      const actions = getActions(s);
+      for (const a of actions) {
+        allActions.push({ ...a, eventTitle: s.eventTitle, eventId: s.calendarEventId, eventStart: s.eventStart });
+      }
+    }
+    // Sort: deadline first (ascending), then by event date
+    allActions.sort((a, b) => {
+      if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+      if (a.deadline) return -1;
+      if (b.deadline) return 1;
+      return b.eventStart.localeCompare(a.eventStart);
+    });
+
     // Group events by attendee
     const byPerson: Record<string, PersonGroup> = {};
 
     for (const event of events) {
+      const summary = summaryByEventId.get(event.id);
+      const eventActions = summary ? getActions(summary) : [];
+
       for (const att of event.attendees || []) {
         if (!byPerson[att.email]) {
           byPerson[att.email] = {
@@ -40,17 +82,45 @@ export function SamePeopleView({ events, weekStart, filterEmail, onEventClick }:
             name: att.displayName || att.email,
             events: [],
             totalMinutes: 0,
+            actions: [],
           };
         }
         const mins = differenceInMinutes(parseISO(event.end), parseISO(event.start));
         byPerson[att.email].events.push(event);
         byPerson[att.email].totalMinutes += mins;
+
+        // Add actions relevant to this person (assigned to them, or from meetings with them)
+        for (const a of eventActions) {
+          byPerson[att.email].actions.push({
+            ...a,
+            eventTitle: event.summary,
+            eventId: event.id,
+            eventStart: event.start,
+          });
+        }
       }
     }
 
     const personGroups = Object.values(byPerson)
       .filter((p) => p.events.length >= 1)
       .sort((a, b) => b.events.length - a.events.length);
+
+    // Deduplicate actions per person (same action can come from the same meeting)
+    for (const pg of personGroups) {
+      const seen = new Set<string>();
+      pg.actions = pg.actions.filter((a) => {
+        const key = `${a.eventId}-${a.text}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      pg.actions.sort((a, b) => {
+        if (a.deadline && b.deadline) return a.deadline.localeCompare(b.deadline);
+        if (a.deadline) return -1;
+        if (b.deadline) return 1;
+        return b.eventStart.localeCompare(a.eventStart);
+      });
+    }
 
     // Find clusters: groups of meetings with identical attendees
     const clusterMap = new Map<string, MeetingCluster>();
@@ -78,7 +148,6 @@ export function SamePeopleView({ events, weekStart, filterEmail, onEventClick }:
     // Recommendations
     const recommendations: string[] = [];
 
-    // Find clusters that could be merged (same people, multiple short meetings)
     for (const cluster of clusters) {
       if (cluster.events.length >= 3) {
         const avgMins = Math.round(cluster.totalMinutes / cluster.events.length);
@@ -90,7 +159,6 @@ export function SamePeopleView({ events, weekStart, filterEmail, onEventClick }:
       }
     }
 
-    // Find people you spend most time with
     const topPerson = personGroups[0];
     if (topPerson && topPerson.events.length >= 4) {
       recommendations.push(
@@ -98,7 +166,6 @@ export function SamePeopleView({ events, weekStart, filterEmail, onEventClick }:
       );
     }
 
-    // Back-to-back with same people
     const sorted = [...events].sort((a, b) => a.start.localeCompare(b.start));
     for (let i = 0; i < sorted.length - 1; i++) {
       const curr = sorted[i];
@@ -115,10 +182,9 @@ export function SamePeopleView({ events, weekStart, filterEmail, onEventClick }:
       }
     }
 
-    return { personGroups, clusters, recommendations };
-  }, [events]);
+    return { personGroups, clusters, allActions, recommendations };
+  }, [events, summaries]);
 
-  // If filtering by a specific person, show only that person's view
   const filteredGroups = filterEmail
     ? personGroups.filter((p) => p.email === filterEmail)
     : personGroups;
@@ -127,18 +193,96 @@ export function SamePeopleView({ events, weekStart, filterEmail, onEventClick }:
     ? clusters.filter((c) => c.peopleEmails.includes(filterEmail))
     : clusters;
 
+  const filteredActions = filterEmail
+    ? allActions.filter((a) =>
+        a.assignee?.toLowerCase().includes(
+          (filteredGroups[0]?.name || filterEmail).split("@")[0].toLowerCase()
+        )
+      )
+    : allActions;
+
   return (
     <div className="flex h-full flex-col overflow-auto">
       <h2 className="mb-1 text-lg font-semibold">
         {filterEmail
-          ? `Meetings with ${filteredGroups[0]?.name || filterEmail}`
-          : "Same People · Meeting Groups"}
+          ? `${filteredGroups[0]?.name || filterEmail}`
+          : "Commitments"}
       </h2>
       <p className="mb-6 text-sm text-muted-foreground">
         {filterEmail
-          ? "All meetings involving this person"
-          : "See who you meet with most and find optimization opportunities"}
+          ? "Meetings, actions and agreements with this person"
+          : "Actions, agreements and meeting groups at a glance"}
       </p>
+
+      {/* All Actions — top block */}
+      {allActions.length > 0 && !filterEmail && (
+        <div className="mb-6">
+          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+            <CircleDot className="h-3.5 w-3.5" />
+            All Actions ({allActions.length})
+          </h3>
+          <div className="space-y-2">
+            {allActions.map((action, i) => (
+              <button
+                key={i}
+                onClick={() => onEventClick(action.eventId)}
+                className="w-full rounded-md border px-3 py-2 text-left hover:bg-muted/30 transition-colors"
+              >
+                <p className="text-sm">{action.text}</p>
+                <div className="mt-1 flex items-center gap-3 flex-wrap">
+                  {action.assignee && (
+                    <span className="flex items-center gap-1 text-xs text-indigo-600">
+                      <User className="h-3 w-3" />
+                      {action.assignee}
+                    </span>
+                  )}
+                  {action.deadline && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <CalendarClock className="h-3 w-3" />
+                      {formatDeadline(action.deadline)}
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground/60 truncate">
+                    {action.eventTitle}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Filtered person's actions */}
+      {filterEmail && filteredActions.length > 0 && (
+        <div className="mb-6">
+          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+            <CircleDot className="h-3.5 w-3.5" />
+            Assigned Actions ({filteredActions.length})
+          </h3>
+          <div className="space-y-2">
+            {filteredActions.map((action, i) => (
+              <button
+                key={i}
+                onClick={() => onEventClick(action.eventId)}
+                className="w-full rounded-md border px-3 py-2 text-left hover:bg-muted/30 transition-colors"
+              >
+                <p className="text-sm">{action.text}</p>
+                <div className="mt-1 flex items-center gap-3">
+                  {action.deadline && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <CalendarClock className="h-3 w-3" />
+                      {formatDeadline(action.deadline)}
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground/60 truncate">
+                    {action.eventTitle}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recommendations */}
       {recommendations.length > 0 && !filterEmail && (
@@ -155,7 +299,7 @@ export function SamePeopleView({ events, weekStart, filterEmail, onEventClick }:
         </div>
       )}
 
-      {/* Meeting Clusters (same attendees) */}
+      {/* Meeting Clusters */}
       {filteredClusters.length > 0 && (
         <div className="mb-6">
           <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">

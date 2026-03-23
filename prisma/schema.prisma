@@ -51,6 +51,7 @@ model Summary {
   summaryContext  String?  @map("summary_context")
   summaryMainIdeas String[] @map("summary_main_ideas")
   summaryActions  String[] @map("summary_actions")
+  structuredActions Json?  @map("structured_actions")
   tags            String[]
   modelUsed       String?  @map("model_used")
   createdAt       DateTime @default(now()) @map("created_at")
