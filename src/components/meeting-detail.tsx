@@ -141,6 +141,12 @@ export function MeetingDetail({
                 {event.attendees.map((a) => a.displayName || a.email).join(", ")}
               </p>
             )}
+            {event.description && (
+              <div className="mt-3 rounded-md bg-muted/50 p-3">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Description</p>
+                <p className="text-sm whitespace-pre-wrap break-words">{event.description}</p>
+              </div>
+            )}
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />

@@ -16,9 +16,84 @@ interface CalendarGridProps {
   onEventClick: (eventId: string) => void;
   onNavigate: (direction: "prev" | "next" | "today") => void;
   selectedEventId: string | null;
+  highlightedEventIds?: Set<string> | null;
 }
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7); // 7:00 — 20:00
+
+const OVERLAP_COLORS = [
+  { bg: "bg-indigo-100", text: "text-indigo-900", hover: "hover:bg-indigo-200", sub: "text-indigo-600", dot: "border-indigo-400", dotFill: "bg-indigo-500" },
+  { bg: "bg-violet-100", text: "text-violet-900", hover: "hover:bg-violet-200", sub: "text-violet-600", dot: "border-violet-400", dotFill: "bg-violet-500" },
+  { bg: "bg-sky-100", text: "text-sky-900", hover: "hover:bg-sky-200", sub: "text-sky-600", dot: "border-sky-400", dotFill: "bg-sky-500" },
+  { bg: "bg-emerald-100", text: "text-emerald-900", hover: "hover:bg-emerald-200", sub: "text-emerald-600", dot: "border-emerald-400", dotFill: "bg-emerald-500" },
+  { bg: "bg-amber-100", text: "text-amber-900", hover: "hover:bg-amber-200", sub: "text-amber-600", dot: "border-amber-400", dotFill: "bg-amber-500" },
+];
+
+function layoutEventsForDay(events: CalendarEvent[]) {
+  if (events.length === 0) return [];
+
+  const parsed = events.map((e) => {
+    const start = parseISO(e.start);
+    const end = parseISO(e.end);
+    return {
+      event: e,
+      startMin: start.getHours() * 60 + start.getMinutes(),
+      endMin: end.getHours() * 60 + end.getMinutes(),
+    };
+  }).sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+
+  // Assign columns using greedy algorithm
+  const columns: { endMin: number }[] = [];
+  const result: { event: CalendarEvent; column: number; totalColumns: number; colorIdx: number }[] = [];
+
+  // Group overlapping events into clusters
+  const clusters: typeof parsed[] = [];
+  let currentCluster: typeof parsed = [];
+
+  for (const item of parsed) {
+    if (currentCluster.length === 0 || item.startMin < Math.max(...currentCluster.map(c => c.endMin))) {
+      currentCluster.push(item);
+    } else {
+      clusters.push(currentCluster);
+      currentCluster = [item];
+    }
+  }
+  if (currentCluster.length > 0) clusters.push(currentCluster);
+
+  for (const cluster of clusters) {
+    columns.length = 0;
+
+    const clusterItems: { event: CalendarEvent; column: number }[] = [];
+
+    for (const item of cluster) {
+      let placed = false;
+      for (let col = 0; col < columns.length; col++) {
+        if (item.startMin >= columns[col].endMin) {
+          columns[col].endMin = item.endMin;
+          clusterItems.push({ event: item.event, column: col });
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        columns.push({ endMin: item.endMin });
+        clusterItems.push({ event: item.event, column: columns.length - 1 });
+      }
+    }
+
+    const totalColumns = columns.length;
+    for (const ci of clusterItems) {
+      result.push({
+        event: ci.event,
+        column: ci.column,
+        totalColumns,
+        colorIdx: totalColumns > 1 ? ci.column % OVERLAP_COLORS.length : 0,
+      });
+    }
+  }
+
+  return result;
+}
 
 export function CalendarGrid({
   events,
@@ -28,6 +103,7 @@ export function CalendarGrid({
   onEventClick,
   onNavigate,
   selectedEventId,
+  highlightedEventIds,
 }: CalendarGridProps) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -121,62 +197,84 @@ export function CalendarGrid({
           </div>
 
           {/* Day columns */}
-          {days.map((day) => (
-            <div
-              key={day.toISOString()}
-              className={cn(
-                "relative border-r last:border-r-0",
-                isToday(day) && "bg-indigo-50/30"
-              )}
-            >
-              {/* Hour lines */}
-              {HOURS.map((hour) => (
-                <div key={hour} className="h-16 border-b" />
-              ))}
+          {days.map((day) => {
+            const dayEvents = getEventsForDay(day);
+            const layouted = layoutEventsForDay(dayEvents);
 
-              {/* Events */}
-              {loading ? (
-                <div className="absolute inset-0 space-y-1 p-1">
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-8 w-full" />
-                </div>
-              ) : (
-                getEventsForDay(day).map((event) => {
-                  const pos = getEventPosition(event);
-                  const hasSummary = summaryEventIds.has(event.id);
-                  const isSelected = selectedEventId === event.id;
-                  return (
-                    <button
-                      key={event.id}
-                      className={cn(
-                        "absolute left-0.5 right-0.5 overflow-hidden rounded px-1.5 py-0.5 text-left text-xs transition-colors",
-                        isSelected
-                          ? "bg-indigo-500 text-white ring-2 ring-indigo-500 ring-offset-1"
-                          : "bg-indigo-100 text-indigo-900 hover:bg-indigo-200"
-                      )}
-                      style={{ top: pos.top, height: pos.height }}
-                      onClick={() => onEventClick(event.id)}
-                    >
-                      <div className="flex items-center gap-1">
-                        <span
-                          className={cn(
-                            "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
-                            hasSummary ? "bg-indigo-500" : "border border-indigo-400"
-                          )}
-                        />
-                        <span className="truncate font-medium">
-                          {event.summary}
-                        </span>
-                      </div>
-                      <div className={cn("truncate", isSelected ? "text-indigo-100" : "text-indigo-600")}>
-                        {format(parseISO(event.start), "h:mm a")}
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          ))}
+            return (
+              <div
+                key={day.toISOString()}
+                className={cn(
+                  "relative border-r last:border-r-0",
+                  isToday(day) && "bg-indigo-50/30"
+                )}
+              >
+                {/* Hour lines */}
+                {HOURS.map((hour) => (
+                  <div key={hour} className="h-16 border-b" />
+                ))}
+
+                {/* Events */}
+                {loading ? (
+                  <div className="absolute inset-0 space-y-1 p-1">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                ) : (
+                  layouted.map(({ event, column, totalColumns, colorIdx }) => {
+                    const pos = getEventPosition(event);
+                    const hasSummary = summaryEventIds.has(event.id);
+                    const isSelected = selectedEventId === event.id;
+                    const isHighlighted = highlightedEventIds ? highlightedEventIds.has(event.id) : true;
+                    const isDimmed = highlightedEventIds && !isHighlighted;
+                    const colors = OVERLAP_COLORS[colorIdx];
+
+                    const widthPct = 100 / totalColumns;
+                    const leftPct = column * widthPct;
+
+                    return (
+                      <button
+                        key={event.id}
+                        className={cn(
+                          "absolute overflow-hidden rounded px-1.5 py-0.5 text-left text-xs transition-all border-l-2",
+                          isSelected
+                            ? "bg-indigo-500 text-white ring-2 ring-indigo-500 ring-offset-1 border-indigo-700 z-20"
+                            : isDimmed
+                              ? "bg-gray-100 text-gray-400 border-gray-200 opacity-50"
+                              : `${colors.bg} ${colors.text} ${colors.hover} border-${colors.dotFill.replace('bg-', '')}`,
+                        )}
+                        style={{
+                          top: pos.top,
+                          height: pos.height,
+                          left: `calc(${leftPct}% + 2px)`,
+                          width: `calc(${widthPct}% - 4px)`,
+                          zIndex: isSelected ? 20 : 10,
+                        }}
+                        onClick={() => onEventClick(event.id)}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span
+                            className={cn(
+                              "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
+                              isSelected
+                                ? "bg-white"
+                                : hasSummary ? colors.dotFill : `border ${colors.dot}`
+                            )}
+                          />
+                          <span className="truncate font-medium">
+                            {event.summary}
+                          </span>
+                        </div>
+                        <div className={cn("truncate", isSelected ? "text-indigo-100" : colors.sub)}>
+                          {format(parseISO(event.start), "h:mm a")}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

@@ -1,11 +1,24 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
-import { Sparkles, LogOut } from "lucide-react";
+import { Sparkles, LogOut, Users, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 
-export function AppHeader() {
+interface AppHeaderProps {
+  samePeopleFilter: boolean;
+  onToggleSamePeople: () => void;
+  showAnalytics: boolean;
+  onToggleAnalytics: () => void;
+}
+
+export function AppHeader({
+  samePeopleFilter,
+  onToggleSamePeople,
+  showAnalytics,
+  onToggleAnalytics,
+}: AppHeaderProps) {
   const { data: session } = useSession();
 
   return (
@@ -14,6 +27,34 @@ export function AppHeader() {
         <Sparkles className="h-5 w-5 text-indigo-500" />
         <span className="font-semibold">MeetMind</span>
       </div>
+
+      <div className="flex items-center gap-1.5">
+        <Button
+          variant={samePeopleFilter ? "default" : "outline"}
+          size="sm"
+          onClick={onToggleSamePeople}
+          className={cn(
+            "gap-1.5",
+            samePeopleFilter && "bg-indigo-500 hover:bg-indigo-600"
+          )}
+        >
+          <Users className="h-3.5 w-3.5" />
+          Same People
+        </Button>
+        <Button
+          variant={showAnalytics ? "default" : "outline"}
+          size="sm"
+          onClick={onToggleAnalytics}
+          className={cn(
+            "gap-1.5",
+            showAnalytics && "bg-indigo-500 hover:bg-indigo-600"
+          )}
+        >
+          <BarChart3 className="h-3.5 w-3.5" />
+          Analytics
+        </Button>
+      </div>
+
       <div className="flex items-center gap-3">
         {session?.user && (
           <>

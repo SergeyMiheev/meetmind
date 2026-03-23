@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { CalendarGrid } from "@/components/calendar-grid";
 import { Sidebar } from "@/components/sidebar";
 import { MeetingDetail } from "@/components/meeting-detail";
 import { AppHeader } from "@/components/app-header";
+import { WeeklyAnalytics } from "@/components/weekly-analytics";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   startOfWeek,
@@ -51,6 +52,8 @@ export default function AppPage() {
   const [summaries, setSummaries] = useState<SummaryData[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [samePeopleFilter, setSamePeopleFilter] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
@@ -95,21 +98,53 @@ export default function AppPage() {
 
   const summaryEventIds = new Set(summaries.map((s) => s.calendarEventId));
 
+  // Same People filter: highlight events that share attendees with the selected event
+  const highlightedEventIds = useMemo(() => {
+    if (!samePeopleFilter || !selectedEventId) return null;
+    const selected = events.find((e) => e.id === selectedEventId);
+    if (!selected || !selected.attendees?.length) return null;
+
+    const selectedEmails = new Set(selected.attendees.map((a) => a.email));
+    const matching = new Set<string>();
+    matching.add(selectedEventId);
+
+    for (const event of events) {
+      if (event.id === selectedEventId) continue;
+      const hasCommon = event.attendees?.some((a) => selectedEmails.has(a.email));
+      if (hasCommon) matching.add(event.id);
+    }
+    return matching;
+  }, [samePeopleFilter, selectedEventId, events]);
+
   return (
     <div className="flex h-screen flex-col">
-      <AppHeader />
+      <AppHeader
+        samePeopleFilter={samePeopleFilter}
+        onToggleSamePeople={() => setSamePeopleFilter((v) => !v)}
+        showAnalytics={showAnalytics}
+        onToggleAnalytics={() => setShowAnalytics((v) => !v)}
+      />
       <div className="flex flex-1 overflow-hidden">
         <main className="flex-1 overflow-auto p-6">
-          <CalendarGrid
-            events={events}
-            summaryEventIds={summaryEventIds}
-            weekStart={weekStart}
-            currentDate={currentDate}
-            loading={loading}
-            onEventClick={setSelectedEventId}
-            onNavigate={navigateWeek}
-            selectedEventId={selectedEventId}
-          />
+          {showAnalytics ? (
+            <WeeklyAnalytics
+              events={events}
+              summaries={summaries}
+              weekStart={weekStart}
+            />
+          ) : (
+            <CalendarGrid
+              events={events}
+              summaryEventIds={summaryEventIds}
+              weekStart={weekStart}
+              currentDate={currentDate}
+              loading={loading}
+              onEventClick={setSelectedEventId}
+              onNavigate={navigateWeek}
+              selectedEventId={selectedEventId}
+              highlightedEventIds={highlightedEventIds}
+            />
+          )}
         </main>
         <Sidebar
           summaries={summaries}
