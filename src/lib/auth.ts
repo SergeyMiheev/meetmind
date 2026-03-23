@@ -63,6 +63,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async jwt({ token, account, user }) {
       if (account) {
+        console.log("[auth] OAuth scopes granted:", account.scope);
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
