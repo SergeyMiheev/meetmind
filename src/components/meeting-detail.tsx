@@ -28,6 +28,7 @@ export function MeetingDetail({
   const [transcribing, setTranscribing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [appendMode, setAppendMode] = useState(false);
+  const [regenerateMode, setRegenerateMode] = useState(false);
 
   const { isRecording, seconds, startRecording, stopRecording } =
     useVoiceRecorder({
@@ -74,6 +75,7 @@ export function MeetingDetail({
         onSummaryCreated(data);
         setRawInput("");
         setAppendMode(false);
+        setRegenerateMode(false);
       }
     } finally {
       setGenerating(false);
@@ -104,6 +106,7 @@ export function MeetingDetail({
     if (!summary) return;
     setRawInput(summary.rawInput);
     setAppendMode(false);
+    setRegenerateMode(true);
   };
 
   if (!event) {
@@ -145,7 +148,7 @@ export function MeetingDetail({
         </div>
 
         <div className="p-6">
-          {summary && !appendMode ? (
+          {summary && !appendMode && !regenerateMode ? (
             /* State B — Has Summary */
             <div>
               <div className="mb-4 flex flex-wrap gap-1.5">

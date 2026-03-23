@@ -107,15 +107,21 @@ export async function POST(request: NextRequest) {
       console.error("[summary] DB error:", dbErr);
     }
 
-    // Return AI result even if DB save fails
+    // Return AI result even if DB save fails — include all fields frontend expects
     return NextResponse.json({
+      id: `temp-${Date.now()}`,
       calendarEventId: eventId,
-      eventTitle,
+      eventTitle: eventTitle || "(No title)",
+      eventStart: eventStart,
+      eventEnd: eventEnd,
+      eventAttendees: eventAttendees || [],
+      rawInput,
       summaryContext: parsed.context,
       summaryMainIdeas: parsed.mainIdeas || [],
       summaryActions: parsed.actionItems || [],
       tags: parsed.tags || [],
       modelUsed: "gemini-2.5-flash",
+      createdAt: new Date().toISOString(),
     });
   } catch (err) {
     console.error("[summary] Unexpected error:", err);
